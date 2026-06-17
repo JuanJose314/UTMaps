@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>UTMaps</title>
+
+    <!-- Leaflet CSS y JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Mapa ocupa toda la pantalla */
+        #map {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* Panel flotante - Adaptado para móvil */
+        .floating-panel {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 2;
+            background: #ffffff;
+            border-radius: 16px 16px 0 0;
+            padding: 16px 20px 20px;
+            max-height: 60vh;
+            overflow-y: auto;
+            box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.15);
+            border: none;
+            color: #333333;
+            font-family: 'Segoe UI', Roboto, system-ui, -apple-system, sans-serif;
+            transition: max-height 0.3s ease;
+        }
+
+        /* Indicador de arrastre (para móvil) */
+        .drag-handle {
+            width: 40px;
+            height: 4px;
+            background: #d1d5db;
+            border-radius: 4px;
+            margin: 0 auto 12px;
+            display: block;
+        }
+
+        /* Logo y encabezado - CENTRADO */
+        .panel-header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 14px;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 10px;
+        }
+
+        .panel-logo {
+            width: 50px;
+            height: 50px;
+            object-fit: contain;
+            margin-bottom: 4px;
+        }
+
+        .panel-title {
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            margin: 0;
+            text-align: center;
+        }
+
+        .panel-title .utm {
+            color: #cc0000;
+            /* Rojo UTM */
+        }
+
+        .panel-title .aps {
+            color: #ffcc00;
+            /* Amarillo fuerte */
+        }
+
+        .select-group {
+            margin-bottom: 12px;
+        }
+
+        .select-group label {
+            display: block;
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-bottom: 3px;
+            color: #555555;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .select-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid #d1d5db;
+            background: #f9fafb;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            color: #1f2937;
+            -webkit-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23999' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+        }
+
+        .select-group select:focus {
+            outline: none;
+            border-color: #cc0000;
+            box-shadow: 0 0 0 3px rgba(204, 0, 0, 0.1);
+        }
+
+        .select-group select option {
+            color: #1f2937;
+        }
+
+        .select-group select option:first-child {
+            color: #9ca3af;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 14px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            flex: 1;
+            min-width: 70px;
+            padding: 12px 14px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            touch-action: manipulation;
+            min-height: 48px;
+        }
+
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn:active:not(:disabled) {
+            transform: scale(0.97);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-primary {
+            background: #cc0000;
+            /* Rojo UTM */
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #a30000;
+        }
+
+        .btn-bano {
+            background: #1a73e8;
+            /* Azul sanitario */
+            color: white;
+        }
+
+        .btn-bano:hover:not(:disabled) {
+            background: #1557b0;
+        }
+
+        /* Loader pequeño */
+        .loader {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #fff;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 5px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* ========== VERSIÓN PARA PANTALLAS GRANDES (LAPTOP/TABLET) ========== */
+        @media (min-width: 768px) {
+            .floating-panel {
+                position: fixed;
+                top: 20px;
+                left: 20px;
+                right: auto;
+                bottom: auto;
+                border-radius: 12px;
+                max-height: 90vh;
+                max-width: 320px;
+                min-width: 280px;
+                padding: 20px;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+                border: 1px solid rgba(0, 0, 0, 0.08);
+            }
+
+            .drag-handle {
+                display: none;
+            }
+
+            .panel-logo {
+                width: 60px;
+                height: 60px;
+            }
+
+            .panel-title {
+                font-size: 1.6rem;
+            }
+
+            .select-group select {
+                padding: 8px 12px;
+                font-size: 0.85rem;
+            }
+
+            .btn {
+                padding: 10px 12px;
+                font-size: 0.8rem;
+                min-height: 40px;
+            }
+        }
+
+        /* ========== VERSIÓN PARA TABLET (entre 768px y 1024px) ========== */
+        @media (min-width: 768px) and (max-width: 1024px) {
+            .floating-panel {
+                max-width: 280px;
+                min-width: 240px;
+                top: 16px;
+                left: 16px;
+                padding: 16px;
+            }
+
+            .panel-logo {
+                width: 50px;
+                height: 50px;
+            }
+
+            .panel-title {
+                font-size: 1.3rem;
+            }
+        }
+
+        /* ========== VERSIÓN PARA MÓVIL PEQUEÑO (menos de 400px) ========== */
+        @media (max-width: 400px) {
+            .floating-panel {
+                padding: 12px 14px 16px;
+                max-height: 55vh;
+            }
+
+            .panel-logo {
+                width: 40px;
+                height: 40px;
+            }
+
+            .panel-title {
+                font-size: 1.2rem;
+            }
+
+            .select-group select {
+                padding: 8px 10px;
+                font-size: 0.85rem;
+            }
+
+            .btn {
+                padding: 10px 8px;
+                font-size: 0.75rem;
+                min-height: 40px;
+                min-width: 60px;
+            }
+
+            .btn-group {
+                gap: 6px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <div class="floating-panel">
+        <!-- Indicador de arrastre (solo visible en móvil) -->
+        <span class="drag-handle"></span>
+
+        <!-- Encabezado con logo y título CENTRADO -->
+        <div class="panel-header">
+            <img src="{{ url_for('static', filename='logo-utm.png') }}" alt="Logo UTM" class="panel-logo" onerror="this.style.display='none'">
+            <h1 class="panel-title">
+                <span class="utm">UTM</span><span class="aps">aps</span>
+            </h1>
+        </div>
+
+        <div class="select-group">
+            <label>🟢 ORIGEN</label>
+            <select id="origen">
+                <option value="">Selecciona...</option>
+                {% for lugar in lugares %}
+                    {% if not lugar.startswith('V') %}
+                        <option value="{{ lugar }}">{{ lugar }}</option>
+                    {% endif %}
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="select-group">
+            <label>🔴 DESTINO</label>
+            <select id="destino">
+                <option value="">Selecciona...</option>
+                {% for lugar in lugares %}
+                    {% if not lugar.startswith('V') %}
+                        <option value="{{ lugar }}">{{ lugar }}</option>
+                    {% endif %}
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="btn-group">
+            <button class="btn btn-primary" onclick="buscarRuta()">🔍 Ruta</button>
+            <button class="btn btn-bano" onclick="banoMasCercano()">🚻 Baño</button>
+        </div>
+    </div>
+
+    <script>
+        let map;
+        let currentRoute = null;
+        let currentMarkers = [];
+        let currentRoutePoints = [];
+
+        // Inicializar mapa con OpenStreetMap
+        function initMap() {
+            map = L.map('map', {
+                zoomControl: true,
+                attributionControl: true
+            }).setView([17.8275, -97.8044], 16);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                maxZoom: 19
+            }).addTo(map);
+
+            // En móvil, ajustar el zoom para que se vea bien
+            if (window.innerWidth < 768) {
+                map.setZoom(15);
+            }
+        }
+
+        // Limpiar rutas y marcadores anteriores
+        function limpiarMapa() {
+            if (currentRoute) {
+                map.removeLayer(currentRoute);
+                currentRoute = null;
+            }
+            currentMarkers.forEach(marker => map.removeLayer(marker));
+            currentMarkers = [];
+            currentRoutePoints = [];
+        }
+
+        // Dibujar ruta en el mapa
+        function dibujarRuta(coordenadas, distancia, pasos) {
+            limpiarMapa();
+
+            if (!coordenadas || coordenadas.length < 2) {
+                alert('No hay suficientes puntos para dibujar la ruta');
+                return;
+            }
+
+            currentRoutePoints = coordenadas;
+
+            currentRoute = L.polyline(coordenadas, {
+                color: '#cc0000',
+                weight: 6,
+                opacity: 0.9,
+                smoothFactor: 1
+            }).addTo(map);
+
+            const inicioIcon = L.divIcon({
+                html: '<div style="font-size: 28px;">🟢</div>',
+                iconSize: [30, 30],
+                className: 'marker-icon'
+            });
+
+            const finIcon = L.divIcon({
+                html: '<div style="font-size: 28px;">🔴</div>',
+                iconSize: [30, 30],
+                className: 'marker-icon'
+            });
+
+            const inicioMarker = L.marker(coordenadas[0], { icon: inicioIcon }).addTo(map);
+            const finMarker = L.marker(coordenadas[coordenadas.length - 1], { icon: finIcon }).addTo(map);
+            currentMarkers.push(inicioMarker, finMarker);
+
+            inicioMarker.bindTooltip("📍 INICIO", {
+                permanent: false,
+                direction: 'top',
+                className: 'tooltip-label'
+            });
+
+            finMarker.bindTooltip("🏁 DESTINO", {
+                permanent: false,
+                direction: 'top',
+                className: 'tooltip-label'
+            });
+
+            try {
+                const bounds = currentRoute.getBounds();
+                if (bounds.isValid()) {
+                    const southWest = bounds.getSouthWest();
+                    const northEast = bounds.getNorthEast();
+                    const latDelta = (northEast.lat - southWest.lat) * 0.2;
+                    const lngDelta = (northEast.lng - southWest.lng) * 0.2;
+
+                    const expandedBounds = L.latLngBounds(
+                        [southWest.lat - latDelta, southWest.lng - lngDelta],
+                        [northEast.lat + latDelta, northEast.lng + lngDelta]
+                    );
+
+                    map.fitBounds(expandedBounds, {
+                        padding: [50, 50],
+                        maxZoom: 19
+                    });
+                }
+            } catch (e) {
+                console.warn('Error al ajustar bounds:', e);
+            }
+        }
+
+        // Buscar ruta
+        async function buscarRuta() {
+            const origen = document.getElementById('origen').value;
+            const destino = document.getElementById('destino').value;
+
+            if (!origen) {
+                alert('⚠️ Selecciona un ORIGEN');
+                document.getElementById('origen').focus();
+                return;
+            }
+            if (!destino) {
+                alert('⚠️ Selecciona un DESTINO');
+                document.getElementById('destino').focus();
+                return;
+            }
+            if (origen === destino) {
+                alert('⚠️ El origen y el destino no pueden ser iguales');
+                return;
+            }
+
+            const btns = document.querySelectorAll('.btn');
+            btns.forEach(btn => {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="loader"></span> Cargando...';
+            });
+
+            try {
+                const response = await fetch('/ruta', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        origen: origen,
+                        destino: destino
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    dibujarRuta(data.coordenadas, data.distancia, data.pasos);
+                } else {
+                    alert('❌ ' + (data.error || 'Error al obtener la ruta'));
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Error al conectar con el servidor. Verifica que el servidor esté corriendo.');
+            } finally {
+                btns.forEach(btn => {
+                    btn.disabled = false;
+                    if (btn.classList.contains('btn-primary')) {
+                        btn.innerHTML = '🔍 Ruta';
+                    } else if (btn.classList.contains('btn-bano')) {
+                        btn.innerHTML = '🚻 Baño';
+                    }
+                });
+            }
+        }
+
+        // Baño más cercano
+        async function banoMasCercano() {
+            const origen = document.getElementById('origen').value;
+
+            if (!origen) {
+                alert('⚠️ Selecciona un ORIGEN');
+                document.getElementById('origen').focus();
+                return;
+            }
+
+            const btns = document.querySelectorAll('.btn');
+            btns.forEach(btn => {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="loader"></span> Buscando...';
+            });
+
+            try {
+                const response = await fetch('/bano_cercano', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        origen: origen
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    dibujarRuta(data.coordenadas, data.distancia, data.pasos);
+                    document.getElementById('destino').value = data.destino;
+                } else {
+                    alert('❌ ' + (data.error || 'No se encontró ningún baño cercano'));
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Error al conectar con el servidor. Verifica que el servidor esté corriendo.');
+            } finally {
+                btns.forEach(btn => {
+                    btn.disabled = false;
+                    if (btn.classList.contains('btn-primary')) {
+                        btn.innerHTML = '🔍 Ruta';
+                    } else if (btn.classList.contains('btn-bano')) {
+                        btn.innerHTML = '🚻 Baño';
+                    }
+                });
+            }
+        }
+
+        // Enter para buscar
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                const activeElement = document.activeElement;
+                if (activeElement && (activeElement.id === 'origen' || activeElement.id === 'destino')) {
+                    buscarRuta();
+                }
+            }
+        });
+
+        // Detectar cambios de orientación en móvil
+        window.addEventListener('resize', function() {
+            if (window.innerWidth < 768) {
+                // En móvil, ajustar el zoom si es necesario
+                if (map) {
+                    // No forzamos zoom, solo mantenemos
+                }
+            }
+        });
+
+        window.addEventListener('load', initMap);
+
+        console.log('🗺️ UTMaps cargado correctamente');
+        console.log('📍 Total de ubicaciones disponibles:', document.querySelectorAll('#origen option').length - 1);
+    </script>
+</body>
+</html>
